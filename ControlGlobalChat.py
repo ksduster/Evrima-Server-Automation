@@ -16,6 +16,11 @@ PORT = 8888  # Change this to your RCON port
 PASSWORD = "Your_RCON_Password"  # Replace with your RCON password  Remember RCON is in plaintext
 timeout = 5  # Connection timeout in seconds
 
+# Enable/Disable Global chat values
+disablechatat = 50 # Default 50 - If 51 or more players are in the game when checked - disable global chat
+enablechatat = 30 # Default 30 - If 30 players or less are in the game when checked - Re-enable global chat
+howoften = 300 # Default 5 minutes/300 seconds - Check this often for the number of players in the game and perform action if needed
+
 # Function to send an RCON command via socket
 def send_rcon_command(command_bytes):
     try:
@@ -138,11 +143,11 @@ def monitor_chat():
 
             if current_global_chat_status is None:
                 logging.error("Failed to retrieve global chat status. Skipping this cycle.")
-                time.sleep(30)  # Wait before the next iteration
+                time.sleep(howoften)  # Wait before the next iteration
                 continue  # Skip to the next iteration if we can't get the status
 
             # Check if global chat is enabled and there is at least 1 player connected
-            if current_global_chat_status and player_count > 30:
+            if current_global_chat_status and player_count > disablechatat:
                 if global_chat_enabled:  # Only toggle if it is currently enabled
                     logging.info("Conditions met to disable global chat.")
                     toggle_global_chat(False)  # Disable global chat
@@ -150,7 +155,7 @@ def monitor_chat():
                     logging.info("Global chat disabled due to players connected.")
                 else:
                     logging.info("Global chat is already disabled, no action taken.")
-            elif not current_global_chat_status and player_count <= 30:
+            elif not current_global_chat_status and player_count <= enablechatat:
                 if not global_chat_enabled:  # Only toggle if it is currently disabled
                     logging.info("Conditions met to enable global chat.")
                     toggle_global_chat(True)  # Enable global chat
@@ -162,8 +167,8 @@ def monitor_chat():
         except Exception as e:
             logging.error(f"An error occurred in the main loop: {e}")
 
-        # Wait for 30 seconds before checking again
-        time.sleep(30)
+        # Wait for 300 seconds before checking again
+        time.sleep(howoften)
 
 # Start the monitoring process
 logging.info("Starting global chat monitor bot...")
