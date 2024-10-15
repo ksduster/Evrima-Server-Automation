@@ -7,13 +7,13 @@ logging.basicConfig(
     filename="global_chat_monitor.log",  # Log file name
     filemode="a",  # Append mode
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG  # Log everything from DEBUG level and above
+    level=logging.INFO  # Log everything from DEBUG level and above
 )
 
 # RCON Connection Settings
-HOST = "Your_Server_IP"  # Replace with your IP address
-PORT = 8888  # Change this to your RCON port
-PASSWORD = "Your_RCON_Password"  # Replace with your RCON password  Remember RCON is in plaintext
+HOST = "192.168.15.99"  # Replace with your IP address
+PORT = 7772  # Change this to your RCON port
+PASSWORD = "415uhIMhntJg43vPqadg"  # Replace with your RCON password  Remember RCON is in plaintext
 timeout = 5  # Connection timeout in seconds
 
 # Enable/Disable Global chat values
@@ -21,6 +21,11 @@ disablechatat = 50 # Default 50 - If 51 or more players are in the game when che
 enablechatat = 30 # Default 30 - If 30 players or less are in the game when checked - Re-enable global chat
 howoften = 300 # Default 5 minutes/300 seconds - Check this often for the number of players in the game and perform action if needed
 
+# Announcement messages
+disable_announcement = "Global chat has been disabled. Enjoy your gaming!"
+enable_announcement = "Global chat has been re-enabled. Be Kind, Rewind!"
+
+# ----- DO NOT CHANGE ANYTHING BELOW THIS LINE ----- #
 # Function to send an RCON command via socket
 def send_rcon_command(command_bytes):
     try:
@@ -69,7 +74,7 @@ def get_player_count():
         return 0
 
 # Global variable to track the global chat state
-global_chat_enabled = True  # Assume global chat starts as enabled
+global_chat_enabled = None  # Assume global chat starts as enabled
 
 # Function to get server details and check global chat status
 def get_server_details():
@@ -128,6 +133,29 @@ def toggle_global_chat(action):
     except Exception as e:
         logging.error(f"Error while toggling global chat: {e}")
 
+# RCON Command to send an announcement (RCON_ANNOUNCE = 0x10)
+def send_rcon_announcement(message):
+    command_id = b'\x10'  # RCON_ANNOUNCE
+    # Create the command as bytes
+    command = bytes('\x02', 'utf-8') + command_id + bytes(message + '\x00', 'utf-8') + bytes(PASSWORD + '\x00', 'utf-8')
+
+    try:
+        logging.debug(f"Attempting to send RCON announcement: {message}")
+        
+        # Send command
+        response = send_rcon_command(command)
+
+        if response:
+            print(f"Announcement sent: {message}")
+            logging.info(f"RCON Announcement sent: {message}")
+            logging.debug(f"Server response: {response}")
+        else:
+            logging.warning("No response from RCON announcement command.")
+    except Exception as e:
+        logging.error(f"Error while sending RCON announcement: {e}")
+
+
+
 # Main loop to check player count and toggle chat
 def monitor_chat():
     global global_chat_enabled  # Use the global variable to track the state
@@ -143,31 +171,35 @@ def monitor_chat():
 
             if current_global_chat_status is None:
                 logging.error("Failed to retrieve global chat status. Skipping this cycle.")
-                time.sleep(howoften)  # Wait before the next iteration
+                time.sleep(howoften)  # Use the adjustable value for sleep time
                 continue  # Skip to the next iteration if we can't get the status
 
-            # Check if global chat is enabled and there is at least 1 player connected
-            if current_global_chat_status and player_count > disablechatat:
+            # Check if global chat is enabled and player count exceeds disablechatat
+            if current_global_chat_status and player_count >= disablechatat:
                 if global_chat_enabled:  # Only toggle if it is currently enabled
                     logging.info("Conditions met to disable global chat.")
                     toggle_global_chat(False)  # Disable global chat
                     global_chat_enabled = False  # Update the state to disabled
                     logging.info("Global chat disabled due to players connected.")
+                    send_rcon_announcement(disable_announcement)  # Send announcement for disabling global chat
                 else:
                     logging.info("Global chat is already disabled, no action taken.")
+
+            # Check if global chat is disabled and player count is less than or equal to enablechatat
             elif not current_global_chat_status and player_count <= enablechatat:
                 if not global_chat_enabled:  # Only toggle if it is currently disabled
                     logging.info("Conditions met to enable global chat.")
                     toggle_global_chat(True)  # Enable global chat
                     global_chat_enabled = True  # Update the state to enabled
-                    logging.info("Global chat enabled due to no players.")
+                    logging.info("Global chat enabled due to low player count.")
+                    send_rcon_announcement(enable_announcement)  # Send announcement for enabling global chat
                 else:
                     logging.info("Global chat is already enabled, no action taken.")
 
         except Exception as e:
             logging.error(f"An error occurred in the main loop: {e}")
 
-        # Wait for 300 seconds before checking again
+        # Wait for the specified interval before checking again
         time.sleep(howoften)
 
 # Start the monitoring process
