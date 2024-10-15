@@ -11,9 +11,9 @@ logging.basicConfig(
 )
 
 # RCON Connection Settings
-HOST = "192.168.15.99"  # Replace with your IP address
+HOST = "Your_IP_here"  # Replace with your IP address
 PORT = 7772  # Change this to your RCON port
-PASSWORD = "415uhIMhntJg43vPqadg"  # Replace with your RCON password  Remember RCON is in plaintext
+PASSWORD = "your_RCON_Password"  # Replace with your RCON password  Remember RCON is in plaintext
 timeout = 5  # Connection timeout in seconds
 
 # Enable/Disable Global chat values
