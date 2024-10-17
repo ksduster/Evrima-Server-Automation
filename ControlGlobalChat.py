@@ -163,7 +163,7 @@ def get_server_details():
         return None
 
 # Global variable to track the global chat state
-global_chat_enabled = True
+global_chat_enabled = get_server_details()
 
 # Log the initial state of global chat
 if global_chat_enabled is not None:
@@ -189,7 +189,7 @@ def monitor_chat():
                 time.sleep(30)  # Use the adjustable value for sleep time
                 continue  # Skip to the next iteration if we can't get the status
 
-            if current_global_chat_status and player_count <= disablechatat:
+            if current_global_chat_status and player_count > disablechatat:
                 if global_chat_enabled:
                     logging.info("Conditions met to disable global chat.")
                     toggle_global_chat(False)
@@ -199,7 +199,7 @@ def monitor_chat():
                 else:
                     logging.info("Global chat is already disabled, no action taken.")
 
-            elif not current_global_chat_status and player_count > enablechatat:
+            elif not current_global_chat_status and player_count < enablechatat:
                 if not global_chat_enabled:
                     logging.info("Conditions met to enable global chat.")
                     toggle_global_chat(True)
@@ -310,12 +310,12 @@ enableannouncement_entry = tk.Entry(root)
 enableannouncement_entry.insert(0, default_enable_announcement)  # Set default value
 enableannouncement_entry.grid(row=8, column=1)
 
-tk.Label(root, text="Greeting Announcement").grid(row=8, column=0)
+tk.Label(root, text="Greeting Announcement").grid(row=9, column=0)
 greeting_entry = tk.Entry(root)
 greeting_entry.insert(0, default_greeting)  # Set default value
 greeting_entry.grid(row=9, column=1)
  
-tk.Label(root, text="Greeting Timer(in seconds)").grid(row=9, column=0)
+tk.Label(root, text="Greeting Timer(in seconds)").grid(row=10, column=0)
 greeting_timer_entry = tk.Entry(root)
 greeting_timer_entry.insert(0, default_greeting_timer)  # Set default value
 greeting_timer_entry.grid(row=10, column=1)
