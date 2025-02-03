@@ -1,6 +1,7 @@
 import time
 import logging
 import socket
+import struct
 
 # Setup logging
 logging.basicConfig(
@@ -27,17 +28,41 @@ enable_announcement = "Global chat has been re-enabled. Be Kind, Rewind!"
 
 # ----- DO NOT CHANGE ANYTHING BELOW THIS LINE ----- #
 # Function to send an RCON command via socket
-def send_rcon_command(command_bytes):
+def send_rcon_command(command, auth=False):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect((HOST, PORT))
-            s.send(command_bytes)
-            message = s.recv(1024)
-            return message.decode()
+
+            if not auth:  # Authenticate before sending commands
+                if not authenticate_rcon(s):
+                    logging.error("RCON authentication failed.")
+                    return None
+
+            # Send the actual command
+            request_id = 2  # Arbitrary request ID
+            payload = struct.pack('<ii', request_id, 2) + command.encode('utf-8') + b'\x00\x00'
+            s.send(payload)
+
+            response = s.recv(4096)
+            return response.decode('utf-8', errors='ignore')
+
     except Exception as e:
         logging.error(f"Error sending RCON command: {e}")
         return None
+
+def authenticate_rcon(sock):
+    """Send authentication request to RCON server."""
+    request_id = 1  # Arbitrary request ID
+    auth_packet = struct.pack('<ii', request_id, 3) + PASSWORD.encode('utf-8') + b'\x00\x00'
+    sock.send(auth_packet)
+
+    response = sock.recv(4096)
+    if len(response) < 12:
+        return False
+
+    resp_id, resp_type = struct.unpack('<ii', response[:8])
+    return resp_id == request_id
 
 # Function to get the player count
 def get_player_count():
