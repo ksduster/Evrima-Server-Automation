@@ -12,10 +12,10 @@ logging.basicConfig(
 )
 
 # RCON Connection Settings
-HOST = "Your_IP_here"  # Replace with your IP address
-PORT = 7772  # Change this to your RCON port
-PASSWORD = "your_RCON_Password"  # Replace with your RCON password  Remember RCON is in plaintext
-timeout = 5  # Connection timeout in seconds
+HOST = "YourIPHere"  # Replace with your IP address
+PORT = port  # Change this to your RCON port
+PASSWORD = "password"  # Replace with your RCON password  Remember RCON is in plaintext
+TIMEOUT = 5  # Connection timeout in seconds
 
 # Enable/Disable Global chat values
 disablechatat = 50 # Default 50 - If 51 or more players are in the game when checked - disable global chat
@@ -27,49 +27,36 @@ disable_announcement = "Global chat has been disabled. Enjoy your gaming!"
 enable_announcement = "Global chat has been re-enabled. Be Kind, Rewind!"
 
 # ----- DO NOT CHANGE ANYTHING BELOW THIS LINE ----- #
-# Function to send an RCON command via socket
-def send_rcon_command(command, auth=False):
+# Function to authenticate with RCON and send a command
+def auth_rcon_command(command_bytes):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
+            s.settimeout(TIMEOUT)
             s.connect((HOST, PORT))
+            
+            # Send authentication packet
+            auth_packet = b"\x01" + PASSWORD.encode() + b"\x00\x00"
+            s.send(auth_packet)
+            auth_response = s.recv(1024)
 
-            if not auth:  # Authenticate before sending commands
-                if not authenticate_rcon(s):
-                    logging.error("RCON authentication failed.")
-                    return None
+            # Validate authentication response
+            if len(auth_response) < 12:
+                logging.error("Failed to authenticate with RCON. Check the password.")
+                return None
 
-            # Send the actual command
-            request_id = 2  # Arbitrary request ID
-            payload = struct.pack('<ii', request_id, 2) + command.encode('utf-8') + b'\x00\x00'
-            s.send(payload)
-
-            response = s.recv(4096)
-            return response.decode('utf-8', errors='ignore')
-
+            s.send(command_bytes)
+            message = s.recv(1024)
+            return message.decode()
     except Exception as e:
         logging.error(f"Error sending RCON command: {e}")
         return None
-
-def authenticate_rcon(sock):
-    """Send authentication request to RCON server."""
-    request_id = 1  # Arbitrary request ID
-    auth_packet = struct.pack('<ii', request_id, 3) + PASSWORD.encode('utf-8') + b'\x00\x00'
-    sock.send(auth_packet)
-
-    response = sock.recv(4096)
-    if len(response) < 12:
-        return False
-
-    resp_id, resp_type = struct.unpack('<ii', response[:8])
-    return resp_id == request_id
 
 # Function to get the player count
 def get_player_count():
     try:
         logging.debug("Attempting to get player list...")
         LIST = bytes('\x02', 'utf-8') + bytes('\x40', 'utf-8') + bytes('\x00', 'utf-8')
-        response = send_rcon_command(LIST)
+        response = auth_rcon_command(LIST)
 
         if response:
             logging.debug(f"Server response: {response}")
@@ -106,7 +93,7 @@ def get_server_details():
     try:
         logging.debug("Attempting to get server details...")
         details_command = bytes('\x02', 'utf-8') + bytes('\x12', 'utf-8') + bytes('\x00', 'utf-8')
-        response = send_rcon_command(details_command)
+        response = auth_rcon_command(details_command)
 
         if response:
             logging.debug(f"Server response: {response}")
@@ -147,7 +134,7 @@ def toggle_global_chat(action):
         logging.debug(f"Attempting to toggle global chat to: {action_str}")
         
         # Send command
-        response = send_rcon_command(command)
+        response = auth_rcon_command(command)
 
         if response:
             print("Toggled global chat:", action_str)
@@ -168,7 +155,7 @@ def send_rcon_announcement(message):
         logging.debug(f"Attempting to send RCON announcement: {message}")
         
         # Send command
-        response = send_rcon_command(command)
+        response = auth_rcon_command(command)
 
         if response:
             print(f"Announcement sent: {message}")
@@ -206,7 +193,7 @@ def monitor_chat():
                     toggle_global_chat(False)  # Disable global chat
                     global_chat_enabled = False  # Update the state to disabled
                     logging.info("Global chat disabled due to players connected.")
-                    send_rcon_announcement(disable_announcement)  # Send announcement for disabling global chat
+                    auth_rcon_announcement(disable_announcement)  # Send announcement for disabling global chat
                 else:
                     logging.info("Global chat is already disabled, no action taken.")
 
@@ -217,7 +204,7 @@ def monitor_chat():
                     toggle_global_chat(True)  # Enable global chat
                     global_chat_enabled = True  # Update the state to enabled
                     logging.info("Global chat enabled due to low player count.")
-                    send_rcon_announcement(enable_announcement)  # Send announcement for enabling global chat
+                    auth_rcon_announcement(enable_announcement)  # Send announcement for enabling global chat
                 else:
                     logging.info("Global chat is already enabled, no action taken.")
 
