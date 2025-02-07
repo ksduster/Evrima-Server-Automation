@@ -1,20 +1,21 @@
 import time
 import logging
 import socket
+import struct
 
 # Setup logging
 logging.basicConfig(
     filename="global_chat_monitor.log",  # Log file name
     filemode="a",  # Append mode
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO  # Log everything from DEBUG level and above
+    level=logging.DEBUG  # Log everything from DEBUG level and above
 )
 
 # RCON Connection Settings
-HOST = "Your_IP_here"  # Replace with your IP address
-PORT = 7772  # Change this to your RCON port
-PASSWORD = "your_RCON_Password"  # Replace with your RCON password  Remember RCON is in plaintext
-timeout = 5  # Connection timeout in seconds
+HOST = "IP_ADDRESS"  # Replace with your IP address
+PORT = PORT  # Change this to your RCON port
+PASSWORD = "password"  # Replace with your RCON password  Remember RCON is in plaintext
+TIMEOUT = 5  # Connection timeout in seconds
 
 # Enable/Disable Global chat values
 disablechatat = 50 # Default 50 - If 51 or more players are in the game when checked - disable global chat
@@ -26,12 +27,23 @@ disable_announcement = "Global chat has been disabled. Enjoy your gaming!"
 enable_announcement = "Global chat has been re-enabled. Be Kind, Rewind!"
 
 # ----- DO NOT CHANGE ANYTHING BELOW THIS LINE ----- #
-# Function to send an RCON command via socket
-def send_rcon_command(command_bytes):
+# Function to authenticate with RCON and send a command
+def auth_rcon_command(command_bytes):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
+            s.settimeout(TIMEOUT)
             s.connect((HOST, PORT))
+            
+            # Send authentication packet
+            auth_packet = b"\x01" + PASSWORD.encode() + b"\x00\x00"
+            s.send(auth_packet)
+            auth_response = s.recv(1024)
+
+            # Validate authentication response
+            if len(auth_response) < 12:
+                logging.error("Failed to authenticate with RCON. Check the password.")
+                return None
+
             s.send(command_bytes)
             message = s.recv(1024)
             return message.decode()
@@ -44,7 +56,7 @@ def get_player_count():
     try:
         logging.debug("Attempting to get player list...")
         LIST = bytes('\x02', 'utf-8') + bytes('\x40', 'utf-8') + bytes('\x00', 'utf-8')
-        response = send_rcon_command(LIST)
+        response = auth_rcon_command(LIST)
 
         if response:
             logging.debug(f"Server response: {response}")
@@ -73,41 +85,45 @@ def get_player_count():
         logging.error(f"Error while getting player list: {e}")
         return 0
 
-# Global variable to track the global chat state
-global_chat_enabled = None  # Assume global chat starts as enabled
+# Define a global variable to store the chat status
+global_chat_status = None  
 
 # Function to get server details and check global chat status
 def get_server_details():
+    global global_chat_status  # Use the global variable
+
     try:
         logging.debug("Attempting to get server details...")
         details_command = bytes('\x02', 'utf-8') + bytes('\x12', 'utf-8') + bytes('\x00', 'utf-8')
-        response = send_rcon_command(details_command)
+        response = auth_rcon_command(details_command)
 
         if response:
             logging.debug(f"Server response: {response}")
-            print("Raw response:", response)
+            print("Raw response:", response)  # Debugging output
 
             # Check for bEnableGlobalChat in the response
             if "bEnableGlobalChat" in response:
-                # Extract the value
-                lines = response.split(",")  # Use comma as the delimiter since it's a single line
-                for line in lines:
-                    if "bEnableGlobalChat" in line:
-                        # Assuming the line is in the format: bEnableGlobalChat=<value>
-                        parts = line.split(':')  # Split by colon
-                        if len(parts) > 1:
-                            global_chat_status = parts[1].strip() == 'true'  # Check if it's true (case insensitive)
-                            logging.info(f"Global chat status retrieved: {global_chat_status}")
-                            return global_chat_status
-            else:
-                logging.warning("bEnableGlobalChat not found in server details response.")
-                return None
+                # Split response into key-value pairs
+                for item in response.split(","):  
+                    if "bEnableGlobalChat" in item:
+                        key, value = item.split(":")  # Ensure splitting by `:` works
+                        value = value.strip().lower()  # Normalize the value
+
+                        # Convert to boolean and store in the global variable
+                        global_chat_status = value == 'true'
+                        logging.info(f"Global chat status retrieved: {global_chat_status}")
+                        return global_chat_status
+
+            logging.warning("bEnableGlobalChat not found in server details response.")
         else:
             logging.warning("No response or empty response from server details command.")
-            return None
+
     except Exception as e:
         logging.error(f"Error while getting server details: {e}")
-        return None
+
+    # If something went wrong, return None
+    return None
+
 
 
 # Function to toggle global chat
@@ -116,13 +132,13 @@ def toggle_global_chat(action):
     action_str = "Enable" if action else "Disable"
 
     # Create the command as bytes
-    command = bytes('\x02', 'utf-8') + command_id + bytes(action_str, 'utf-8') + bytes(PASSWORD, 'utf-8') + bytes('\x00', 'utf-8')
+    command = bytes('\x02', 'utf-8') + command_id + bytes(action_str, 'utf-8') + bytes('\x00', 'utf-8')
 
     try:
         logging.debug(f"Attempting to toggle global chat to: {action_str}")
         
         # Send command
-        response = send_rcon_command(command)
+        response = auth_rcon_command(command)
 
         if response:
             print("Toggled global chat:", action_str)
@@ -137,13 +153,13 @@ def toggle_global_chat(action):
 def send_rcon_announcement(message):
     command_id = b'\x10'  # RCON_ANNOUNCE
     # Create the command as bytes
-    command = bytes('\x02', 'utf-8') + command_id + bytes(message + '\x00', 'utf-8') + bytes(PASSWORD + '\x00', 'utf-8')
+    command = bytes('\x02', 'utf-8') + command_id + bytes(message + '\x00', 'utf-8')
 
     try:
         logging.debug(f"Attempting to send RCON announcement: {message}")
         
         # Send command
-        response = send_rcon_command(command)
+        response = auth_rcon_command(command)
 
         if response:
             print(f"Announcement sent: {message}")
@@ -158,7 +174,7 @@ def send_rcon_announcement(message):
 
 # Main loop to check player count and toggle chat
 def monitor_chat():
-    global global_chat_enabled  # Use the global variable to track the state
+    global global_chat_status  # Use the global variable to track the state
 
     while True:
         try:
@@ -176,25 +192,22 @@ def monitor_chat():
 
             # Check if global chat is enabled and player count exceeds disablechatat
             if current_global_chat_status and player_count >= disablechatat:
-                if global_chat_enabled:  # Only toggle if it is currently enabled
-                    logging.info("Conditions met to disable global chat.")
-                    toggle_global_chat(False)  # Disable global chat
-                    global_chat_enabled = False  # Update the state to disabled
-                    logging.info("Global chat disabled due to players connected.")
-                    send_rcon_announcement(disable_announcement)  # Send announcement for disabling global chat
-                else:
-                    logging.info("Global chat is already disabled, no action taken.")
+                logging.info("Conditions met to disable global chat.")
+                toggle_global_chat(False)  # Disable global chat
+                global_chat_status = False  # Update the state to disabled
+                logging.info("Global chat disabled due to players connected.")
+                send_rcon_announcement(disable_announcement)  # Send announcement for disabling global chat
 
             # Check if global chat is disabled and player count is less than or equal to enablechatat
             elif not current_global_chat_status and player_count <= enablechatat:
-                if not global_chat_enabled:  # Only toggle if it is currently disabled
-                    logging.info("Conditions met to enable global chat.")
-                    toggle_global_chat(True)  # Enable global chat
-                    global_chat_enabled = True  # Update the state to enabled
-                    logging.info("Global chat enabled due to low player count.")
-                    send_rcon_announcement(enable_announcement)  # Send announcement for enabling global chat
-                else:
-                    logging.info("Global chat is already enabled, no action taken.")
+                logging.info("Conditions met to enable global chat.")
+                toggle_global_chat(True)  # Enable global chat
+                global_chat_status = True  # Update the state to enabled
+                logging.info("Global chat enabled due to low player count.")
+                send_rcon_announcement(enable_announcement)  # Send announcement for enabling global chat
+
+            else:
+                logging.info("No changes needed this cycle.")
 
         except Exception as e:
             logging.error(f"An error occurred in the main loop: {e}")
