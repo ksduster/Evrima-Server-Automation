@@ -10,6 +10,11 @@ This script will check your The Isle - Evrima server for the number of players c
 If the selected high value threshold is met, it will disable Global Chat using RCON commands.
 Once the low threshold is met, it will re-enable the chat.
 
+## What is the purpose?
+With public servers, the more people you get in the server the more toxic or distracting the chat can be that takes away from the gameplay. 
+This script will help prevent that when the population reaches the disablechatat threshold. 
+Global chat will be re-enabled when it gets below the enable chat threshold.
+
 ## Configuration:
 RCON Connection Settings
 ```
