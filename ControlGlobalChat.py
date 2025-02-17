@@ -8,7 +8,7 @@ logging.basicConfig(
     filename="global_chat_monitor.log",  # Log file name
     filemode="a",  # Append mode
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG  # Log everything from DEBUG level and above
+    level=logging.INFO  # Log everything from DEBUG level and above
 )
 
 # RCON Connection Settings
